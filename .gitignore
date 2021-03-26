@@ -2,4 +2,4 @@
 __pycache__
 .idea
 .vim
-database/data/admin database/data/db
+database/data/*

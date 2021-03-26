@@ -14,7 +14,7 @@ def db_connections():
     yield True
     disconnect()
 
-@pytest.fixture(scope="session",autouse=False)
+@pytest.fixture(scope="session",autouse=True)
 def initialize_fingate():
     """Прогрев Fingate данными для тестов"""
     cfg = configparser.ConfigParser()
