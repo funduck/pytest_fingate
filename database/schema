@@ -1,0 +1,242 @@
+CREATE TABLE public."Features"
+(
+    ft_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    feature character varying COLLATE pg_catalog."default",
+    description character varying COLLATE pg_catalog."default",
+    CONSTRAINT "Features_pkey" PRIMARY KEY (ft_id)
+)
+
+ALTER TABLE public."Features" OWNER TO root;
+
+
+CREATE TABLE public."Scenarios"
+(
+    sc_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    ft_id integer NOT NULL,
+    description character varying COLLATE pg_catalog."default" NOT NULL,
+    http_status_code character varying COLLATE pg_catalog."default",
+    CONSTRAINT "Scenarios_pkey" PRIMARY KEY (sc_id),
+    CONSTRAINT "Scenarios_ft_id_fkey" FOREIGN KEY (ft_id)
+        REFERENCES public."Features" (ft_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+ALTER TABLE public."Scenarios"
+    OWNER to root;
+
+
+CREATE TABLE public."Params"
+(
+    value character varying(100) COLLATE pg_catalog."default" NOT NULL,
+    descr character varying COLLATE pg_catalog."default",
+    CONSTRAINT "Params_pkey" PRIMARY KEY (value)
+)
+
+ALTER TABLE public."Params"
+    OWNER to root;
+
+
+CREATE TABLE public."ScenarioParams"
+(
+    ps_id integer NOT NULL,
+    sc_id integer NOT NULL,
+    param_name character varying COLLATE pg_catalog."default",
+    param_value character varying COLLATE pg_catalog."default",
+    CONSTRAINT "ScenarioParams_pkey" PRIMARY KEY (ps_id),
+    CONSTRAINT "ScenarioParams_sc_id_fkey" FOREIGN KEY (sc_id)
+        REFERENCES public."Scenarios" (sc_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+
+ALTER TABLE public."ScenarioParams"
+    OWNER to root;
+
+
+CREATE OR REPLACE VIEW public."ScenarioRequests"
+ AS
+ SELECT p.sc_id,
+    p.params,
+    ( SELECT "ScenarioParams".param_value
+           FROM "ScenarioParams"
+          WHERE "ScenarioParams".sc_id = p.sc_id AND "ScenarioParams".param_name::text = 'body'::text) AS body
+   FROM ( SELECT "ScenarioParams".sc_id,
+            string_agg(("ScenarioParams".param_name::text || '='::text) || "ScenarioParams".param_value::text, '&'::text) AS params
+           FROM "ScenarioParams"
+          GROUP BY "ScenarioParams".sc_id) p;
+
+ALTER TABLE public."ScenarioRequests"
+    OWNER TO root;
+
+
+CREATE TABLE public."JsonSchemas"
+(
+    js_id bigint NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 9223372036854775807 CACHE 1 ),
+    descr character varying COLLATE pg_catalog."default",
+    schema character varying COLLATE pg_catalog."default",
+    CONSTRAINT "JsonSchemas_pkey" PRIMARY KEY (js_id)
+)
+
+ALTER TABLE public."JsonSchemas"
+    OWNER to root;
+
+
+CREATE TABLE public."ScenarioJsonSchemas"
+(
+    sc_id bigint,
+    js_id bigint,
+    CONSTRAINT "ScenarioJsonSchemas_js_id_fkey" FOREIGN KEY (js_id)
+        REFERENCES public."JsonSchemas" (js_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+        NOT VALID,
+    CONSTRAINT "ScenarioJsonSchemas_sc_id_fkey" FOREIGN KEY (sc_id)
+        REFERENCES public."Scenarios" (sc_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+        NOT VALID
+)
+
+ALTER TABLE public."ScenarioJsonSchemas"
+    OWNER to root;
+
+
+CREATE OR REPLACE VIEW public."ScenarioValidation"
+ AS
+ SELECT s.sc_id,
+    s.http_status_code,
+    ( SELECT js.schema
+           FROM "JsonSchemas" js,
+            "ScenarioJsonSchemas" sjs
+          WHERE sjs.sc_id = s.sc_id AND sjs.js_id = js.js_id) AS jsonschema
+   FROM "Scenarios" s;
+
+ALTER TABLE public."ScenarioValidation"
+    OWNER TO root;
+
+
+CREATE OR REPLACE VIEW public."ScenarioData"
+ AS
+ SELECT "ScenarioAccounts".sc_id,
+    'account'::text AS datatype,
+    "ScenarioAccounts".acc_id AS row_id
+   FROM "ScenarioAccounts";
+--union all
+
+ALTER TABLE public."ScenarioData"
+    OWNER TO root;
+CREATE TABLE public."Accounts" (
+    acc_id integer NOT NULL,
+    account bigint NOT NULL,
+    terminal_device_id bigint NOT NULL,
+    imsi bigint NOT NULL,
+    msisdn bigint NOT NULL,
+    account_closed bigint NOT NULL,
+    load_id bigint NOT NULL,
+    contract_closed bigint NOT NULL,
+    customer_id bigint NOT NULL,
+    contract_number bigint NOT NULL,
+    service_provider_id bigint NOT NULL,
+    terminal_device_closed bigint NOT NULL,
+    deleted bigint NOT NULL,
+    date_from character varying NOT NULL,
+    date_to character varying NOT NULL,
+    marketing_category_id character varying NOT NULL,
+    billing bigint
+);
+
+
+ALTER TABLE public."Accounts" ALTER COLUMN acc_id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public."Accounts_acc_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+ALTER TABLE ONLY public."Accounts"
+    ADD CONSTRAINT "Accounts_pkey" PRIMARY KEY (acc_id);
+
+ALTER TABLE public."Accounts" OWNER TO root;
+
+
+CREATE TABLE public."ScenarioAccounts" (
+    acc_id integer NOT NULL,
+    sc_id integer NOT NULL
+);
+
+ALTER TABLE ONLY public."ScenarioAccounts"
+    ADD CONSTRAINT "ScenarioAccounts_acc_id_fkey" FOREIGN KEY (acc_id) REFERENCES public."Accounts"(acc_id) NOT VALID;
+ALTER TABLE ONLY public."ScenarioAccounts"
+    ADD CONSTRAINT "ScenarioAccounts_sc_id_fkey" FOREIGN KEY (sc_id) REFERENCES public."Scenarios"(sc_id) NOT VALID;
+
+ALTER TABLE public."ScenarioAccounts" OWNER TO root;
+
+
+CREATE OR REPLACE VIEW public."ScenarioData"
+ AS
+ SELECT "ScenarioAccounts".sc_id,
+    'account'::text AS datatype,
+    "ScenarioAccounts".acc_id AS row_id
+   FROM "ScenarioAccounts";
+
+ALTER TABLE public."ScenarioData"
+    OWNER TO root;
+
+
+CREATE TABLE public."AccountRows" (
+    acr_id integer NOT NULL,
+    billing bigint NOT NULL,
+    account bigint NOT NULL,
+    "customerId" bigint NOT NULL,
+    "contractNumber" bigint NOT NULL,
+    imsi bigint NOT NULL,
+    "terminalDeviceId" bigint NOT NULL,
+    "marketingCategoryId" character varying NOT NULL,
+    date_from character varying NOT NULL,
+    date_to character varying NOT NULL,
+    date_modified double precision NOT NULL,
+    msisdn bigint NOT NULL
+);
+
+ALTER TABLE public."AccountRows" OWNER TO root;
+
+
+CREATE TABLE public."ScenarioAccountRows" (
+    sc_id integer NOT NULL,
+    acr_id integer NOT NULL
+);
+
+ALTER TABLE ONLY public."ScenarioAccountRows"
+    ADD CONSTRAINT "ScenarioAccountRows_acr_id_fkey" FOREIGN KEY (acr_id) REFERENCES public."AccountResponses"(acr_id) NOT VALID;
+ALTER TABLE ONLY public."ScenarioAccountRows"
+    ADD CONSTRAINT "ScenarioAccountRows_sc_id_fkey" FOREIGN KEY (sc_id) REFERENCES public."Scenarios"(sc_id) NOT VALID;
+
+ALTER TABLE public."ScenarioAccountRows" OWNER TO root;
+
+
+CREATE OR REPLACE VIEW public."AccountResponses"
+ AS
+ SELECT sar.sc_id,
+    jsonb_build_object('Accounts', json_agg(row_to_json(ar.*))) AS response
+   FROM "ScenarioAccountRows" sar,
+    "AccountRows" ar
+  GROUP BY sar.sc_id;
+
+ALTER TABLE public."AccountResponses"
+    OWNER TO root;
+
+
+CREATE OR REPLACE VIEW public."ScenarioResponses"
+ AS
+ SELECT "AccountResponses".sc_id,
+    "AccountResponses".response
+   FROM "AccountResponses";
+--union all
+
+ALTER TABLE public."ScenarioResponses"
+    OWNER TO root;
+
+
